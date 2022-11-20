@@ -11,10 +11,19 @@ DTYPE = torch.float32
 
 class DeepPoly:
     def __init__(self, lb, ub, lexpr, uexpr) -> None:
+        """
+        Arguments
+        ---------
+        lb : concrete lower bound
+        ub: concrete upper bound
+        lexpr: symbolic lower bound
+        uexpr: symbolic upper bound
+        """
         self.lb = lb
         self.ub = ub
         self.lexpr = lexpr
         self.uexpr = uexpr
+        # TODO: remove asserts to improve speed
         assert not torch.isnan(self.lb).any()
         assert not torch.isnan(self.ub).any()
         assert lexpr is None or (
@@ -25,6 +34,7 @@ class DeepPoly:
             (not torch.isnan(self.uexpr[0]).any())
             and (not torch.isnan(self.uexpr[1]).any())
         )
+        # TODO: what is dim here
         self.dim = lb.size()[0]
     
     @staticmethod
@@ -166,6 +176,8 @@ def analyze(net, inputs: torch.Tensor, eps: torch.float32, true_label: int):
     print(net.layers)
     print(eps)
     print(inputs.shape)
+
+    pixel_values = inputs.flatten()
     
     return 0
 
