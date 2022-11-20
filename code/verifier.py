@@ -106,6 +106,22 @@ class DPBackSubstitution:
             )
         else:
             return self.prev_layer._get_ub(res_w, res_b)
+    
+class DPReLU(torch.nn.Module, DPBackSubstitution):
+    """ DeepPoly transformer for ReLU layer """
+    def __init__(self) -> None:
+        super(DPReLU, self).__init__()
+    
+    def forward(self):
+        pass
+
+class DPLinear(torch.nn.Module, DPBackSubstitution):
+    """ DeepPoly transformer for affine layer """
+    def __init__(self) -> None:
+        super().__init__()
+    
+    def forward(self):
+        pass
 
 
 def negative_only(w):
