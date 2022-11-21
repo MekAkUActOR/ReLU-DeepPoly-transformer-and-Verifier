@@ -13,6 +13,130 @@ DTYPE = torch.float32
 LR = 0.05
 num_iter = 1000
 
+
+class DeepPoly:
+    def __init__(self, lb, ub, lexpr, uexpr) -> None:
+        """
+        Arguments
+        ---------
+        lb : concrete lower bound
+        ub: concrete upper bound
+        lexpr: symbolic lower bound
+        uexpr: symbolic upper bound
+        """
+        self.lb = lb
+        self.ub = ub
+        self.lexpr = lexpr
+        self.uexpr = uexpr
+        # TODO: remove asserts to improve speed
+        assert not torch.isnan(self.lb).any()
+        assert not torch.isnan(self.ub).any()
+        assert lexpr is None or (
+            (not torch.isnan(self.lexpr[0]).any())
+            and (not torch.isnan(self.lexpr[1]).any())
+        )
+        assert uexpr is None or (
+            (not torch.isnan(self.uexpr[0]).any())
+            and (not torch.isnan(self.uexpr[1]).any())
+        )
+        # TODO: what is dim here
+        self.dim = lb.size()[0]
+    
+    @staticmethod
+    def deeppoly_from_perturbation(x, eps):
+        assert eps >= 0, "epsilon must not be negative value"
+        # We only have to verify images with pixel intensities between 0 and 1.
+        # e.g. if perturbation is 0.2 and pixel value is 0.9
+        # we verify range of [0.7， 1.0], instead of [0.7, 1.1]
+        lb = x - eps
+        ub = x + eps
+        lb[lb < 0] = 0
+        ub[ub > 1] = 1
+        return DeepPoly(lb, ub, None, None)
+    
+
+
+class DPBackSubstitution:
+    def __init__(self) -> None:
+        pass
+
+    def _get_lb(self, expr_w, expr_b):
+        if len(self.output_dp.lexpr[0].size()) == 2:
+            res_w = (
+                positive_only(expr_w) @ self.output_dp.lexpr[0]
+                + negative_only(expr_w) @ self.output_dp.uexpr[0]
+            )
+        else:
+            res_w = (
+                positive_only(expr_w) * self.output_dp.lexpr[0]
+                + negative_only(expr_w) * self.output_dp.uexpr[0]
+            )
+        res_b = (
+            positive_only(expr_w) @ self.output_dp.lexpr[1]
+            + negative_only(expr_w) @ self.output_dp.uexpr[1]
+            + expr_b
+        )
+
+        if self.prev_layer == None:
+            return (
+                positive_only(res_w) @ self.input_dp.lb
+                + negative_only(res_w) @ self.input_dp.ub
+                + res_b
+            )
+        else:
+            return self.prev_layer._get_lb(res_w, res_b)
+
+    def _get_ub(self, expr_w, expr_b):
+        if len(self.output_dp.lexpr[0].size()) == 2:
+            res_w = (
+                positive_only(expr_w) @ self.output_dp.uexpr[0]
+                + negative_only(expr_w) @ self.output_dp.lexpr[0]
+            )
+        else:
+            res_w = (
+                positive_only(expr_w) * self.output_dp.uexpr[0]
+                + negative_only(expr_w) * self.output_dp.lexpr[0]
+            )
+        res_b = (
+            positive_only(expr_w) @ self.output_dp.uexpr[1]
+            + negative_only(expr_w) @ self.output_dp.lexpr[1]
+            + expr_b
+        )
+
+        if self.prev_layer == None:
+            return (
+                positive_only(res_w) @ self.input_dp.ub
+                + negative_only(res_w) @ self.input_dp.lb
+                + res_b
+            )
+        else:
+            return self.prev_layer._get_ub(res_w, res_b)
+    
+class DPReLU(torch.nn.Module, DPBackSubstitution):
+    """ DeepPoly transformer for ReLU layer """
+    def __init__(self) -> None:
+        super(DPReLU, self).__init__()
+    
+    def forward(self):
+        pass
+
+class DPLinear(torch.nn.Module, DPBackSubstitution):
+    """ DeepPoly transformer for affine layer """
+    def __init__(self) -> None:
+        super().__init__()
+    
+    def forward(self):
+        pass
+
+
+def negative_only(w):
+    return -torch.relu(-w)
+
+
+def positive_only(w):
+    return torch.relu(w)    
+    
+
 def transform_image(pixel_values, input_dim):
     normalized_pixel_values = torch.tensor([float(p) / 255.0 for p in pixel_values])
     if len(input_dim) > 1:
