@@ -10,7 +10,7 @@ from deeppoly import DeepPoly, DPReLU, DPLinear
 
 DEVICE = 'cpu'
 DTYPE = torch.float32
-LR = 0.05
+LR = 0.005
 num_iter = 1000
 
 def transform_image(pixel_values, input_dim):
@@ -73,9 +73,11 @@ def verifiable(net, pixels):
 def nomalize(value, inputs):
     if inputs.shape == torch.Size([1, 1, 28, 28]):
         norm = Normalization(DEVICE, 'mnist')
+        norm_val = norm(value).view(-1)
     else:
         norm = Normalization(DEVICE, 'cifar10')
-    return norm(value).view(-1)
+        norm_val = norm(value).reshape(-1)
+    return norm_val
 
 def analyze(net, inputs, eps, true_label):
     low_bound = nomalize((inputs - eps).clamp(0, 1), inputs)
@@ -92,7 +94,12 @@ def analyze(net, inputs, eps, true_label):
         loss.backward()
         optimizer.step()
 
-    return False
+    verifier_output = verifiable_net(DeepPoly(low_bound.shape[0], low_bound, up_bound))
+    res = verifier_output.compute_verify_result(true_label)
+    if (res > 0).all():
+        return True
+    else:
+        return False
 
 
 def main():
