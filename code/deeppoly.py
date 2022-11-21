@@ -44,7 +44,7 @@ class DeepPoly:
 
         return weights
 
-################################################################## to understand
+    # TODO: implement Conv in resolve
     def resolve(self, constrains, layer, lower=True):
         """
         lower = True: return the lower bound
@@ -82,7 +82,7 @@ class DPReLU(nn.Module):
         super(DPReLU, self).__init__()
         self.in_features = in_features
         self.out_features = in_features
-        self.alpha = torch.nn.Parameter(torch.ones(in_features) * 0.3)
+        self.alpha = torch.nn.Parameter(torch.ones(in_features))
         self.alpha.requires_grad = True
 
     def forward(self, x):
@@ -151,5 +151,25 @@ class DPLinear(nn.Module):
 
 
 class DPConv(nn.Module):
-    def  __init__(self, nested: nn.Conv2d):
+    def  __init__(self, nested: nn.Conv2d, in_feature):
         super(DPConv, self).__init__()
+        self.weight = nested.weight.detach()
+        self.bias = nested.bias.detach()
+        self.in_channels = nested.in_channels
+        self.out_channels = nested.out_channels
+        self.kernel_size = nested.kernel_size
+        self.stride = nested.stride
+        self.padding = nested.padding
+        self.padding_mode = nested.padding_mode
+        self.dilation = nested.dilation
+        self.groups = nested.groups
+        self.in_feature = in_feature
+        self.out_feature = func(self.in_feature)
+
+    def forward(self, x):
+        x.save()
+
+    def feature_size(self):
+        self.in_feature
+
+
