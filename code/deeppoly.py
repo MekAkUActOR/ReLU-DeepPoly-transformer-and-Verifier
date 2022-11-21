@@ -82,7 +82,8 @@ class DPReLU(nn.Module):
         super(DPReLU, self).__init__()
         self.in_features = in_features
         self.out_features = in_features
-        self.alpha = torch.nn.Parameter(torch.ones(in_features) * 0.5)
+        self.alpha = torch.nn.Parameter(torch.ones(in_features) * 0.3)
+        self.alpha.requires_grad = True
 
     def forward(self, x):
         x.save()
@@ -107,6 +108,7 @@ class DPReLU(nn.Module):
         '''
         low < 0 < up
         '''
+        # print("ALPHA: ", self.alpha)
         slope_low_3 = torch.tan(self.alpha)
         bias_low_3 = slope_low_3 * low - slope_low_3 * low
         slope_up_3 = (F.relu(up) - F.relu(low)) / (up - low)
@@ -127,7 +129,7 @@ class DPReLU(nn.Module):
 
 class DPLinear(nn.Module):
     def __init__(self, nested: nn.Linear):
-        super().__init__()
+        super(DPLinear, self).__init__()
         self.weight = nested.weight.detach()
         self.bias = nested.bias.detach()
         self.in_features = nested.in_features
@@ -148,3 +150,6 @@ class DPLinear(nn.Module):
         return x
 
 
+class DPConv(nn.Module):
+    def  __init__(self, nested: nn.Conv2d):
+        super(DPConv, self).__init__()
