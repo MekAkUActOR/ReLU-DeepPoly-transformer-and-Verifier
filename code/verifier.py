@@ -2,11 +2,16 @@ import argparse
 import csv
 import torch
 import torch.nn.functional as F
-from networks import get_network, get_net_name, NormalizedResnet
+import torch.nn as nn
+from torch import optim
+from networks import get_network, get_net_name, NormalizedResnet, FullyConnected, Normalization
+from deeppoly import DeepPoly, DPReLU, DPLinear
 
 
 DEVICE = 'cpu'
 DTYPE = torch.float32
+LR = 0.05
+num_iter = 1000
 
 
 class DeepPoly:
@@ -172,30 +177,46 @@ def get_net(net, net_name):
     return net
 
 
-def analyze(net, inputs: torch.Tensor, eps: torch.float32, true_label: int):
-    """ Analyze the neural net's robustness with DeepPoly. 
-    Arguments
-    ---------
-    net : nn.Module
-        will be a Fully Connected, CNN or Residual Neural Net
-    inputs : torch.Tensor
-        input image to the neural net
-    eps : torch.float32
-        epsilon value
-    true label : int
-        ground truth label
-        
-    Return
-    ------
-    Boolean value, True if robustness can be verified
-    """
-    print(net.layers)
-    print(eps)
-    print(inputs.shape)
+# convert networks to verifiable networks
+def verifiable(net, pixels):
+    layers = [module for module in net.modules() if type(module) not in [FullyConnected, nn.Sequential]]
+    verifiable_net = []
 
-    pixel_values = inputs.flatten()
-    
-    return 0
+    for layer in layers:
+        if type(layer) == nn.ReLU:
+            if len(verifiable_net) == 0:
+                verifiable_net.append(DPReLU(len(pixels)))
+            else:
+                verifiable_net.append(DPReLU(verifiable_net[-1].out_features))
+        elif type(layer) == nn.Linear:
+            verifiable_net.append(DPLinear(layer))
+
+    return nn.Sequential(*verifiable_net)
+
+
+def nomalize(value, inputs):
+    if inputs.shape == torch.Size([1, 1, 28, 28]):
+        norm = Normalization(DEVICE, 'mnist')
+    else:
+        norm = Normalization(DEVICE, 'cifar10')
+    return norm(value).view(-1)
+
+def analyze(net, inputs, eps, true_label):
+    low_bound = nomalize((inputs - eps).clamp(0, 1), inputs)
+    up_bound = nomalize((inputs + eps).clamp(0, 1), inputs)
+    verifiable_net = verifiable(net, inputs)
+    optimizer = optim.Adam(verifiable_net.parameters(), lr=LR)
+    for i in range(num_iter):
+        optimizer.zero_grad()
+        verifier_output = verifiable_net(DeepPoly(low_bound.shape[0], low_bound, up_bound))
+        res = verifier_output.compute_verify_result(true_label)
+        if (res > 0).all():
+            return True
+        loss = torch.log(-res[res < 0]).max()
+        loss.backward()
+        optimizer.step()
+
+    return False
 
 
 def main():
@@ -209,6 +230,7 @@ def main():
     
     inputs, true_label, eps = get_spec(args.spec, dataset)
     net = get_net(args.net, net_name)
+    print("net: ", net)
 
     outs = net(inputs)
     pred_label = outs.max(dim=1)[1].item()

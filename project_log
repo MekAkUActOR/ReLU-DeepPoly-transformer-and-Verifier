@@ -1,0 +1,18 @@
+实现给ReLU加上DeepPoly的函数（类）
+使用上述函数（类）将各网络转化为可验证的网络
+使用可验证的网络验证各网络
+=========================================
+
+
+已完成：
+
+
+------------------------------------------------
+要做的：
+在deeppoly.py中实现给ReLU加上DeepPoly的函数（类）
+    - linear和conv的神经元也需要加上DeepPoly吗？
+在verifier.py中使用上述函数（类）将各网络转化为可验证的网络
+    - FullyConnected
+    - Conv
+    - NormalizedResnet
+在verifier.py中使用可验证的网络验证各网络
