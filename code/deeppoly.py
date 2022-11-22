@@ -82,7 +82,8 @@ class DPReLU(nn.Module):
         super(DPReLU, self).__init__()
         self.in_features = in_features
         self.out_features = in_features
-        self.alpha = torch.nn.Parameter(torch.ones(in_features))
+        # self.alpha = torch.nn.Parameter(torch.ones(in_features))
+        self.alpha = torch.nn.Parameter(torch.rand(in_features) * 0.7854)
         self.alpha.requires_grad = True
 
     def forward(self, x):

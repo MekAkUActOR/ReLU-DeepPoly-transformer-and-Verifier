@@ -208,14 +208,9 @@ def analyze(net, inputs, eps, true_label):
     up_bound = nomalize((inputs + eps).clamp(0, 1), inputs)
 
     ####################################### new added
-    for alpha in range(1, 8):
-        alpha = alpha / 10
+    for alpha in range(10):
         verifiable_net = verifiable(net, inputs)
         optimizer = optim.Adam(verifiable_net.parameters(), lr=LR)
-        for p in verifiable_net.parameters():
-            if p.requires_grad:
-                p.data.clamp_(alpha, alpha)
-
         for i in range(num_iter):
             optimizer.zero_grad()
             verifier_output = verifiable_net(DeepPoly(low_bound.shape[0], low_bound, up_bound))
