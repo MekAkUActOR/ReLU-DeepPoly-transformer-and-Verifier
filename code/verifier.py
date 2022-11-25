@@ -11,7 +11,7 @@ from deeppoly import DeepPoly, DPReLU, DPLinear, DPConv
 DEVICE = 'cpu'
 DTYPE = torch.float32
 LR = 0.05
-num_iter = 50
+num_iter = 25
 
 
 # class DeepPoly:
@@ -275,16 +275,17 @@ def main():
     
     inputs, true_label, eps = get_spec(args.spec, dataset)
     net = get_net(args.net, net_name)
+    print(net)
 
     outs = net(inputs)
     pred_label = outs.max(dim=1)[1].item()
     assert pred_label == true_label
-
+    # '''
     if analyze(net, inputs, eps, true_label):
         print('verified')
     else:
         print('not verified')
-
+    # '''
 
 if __name__ == '__main__':
     main()
