@@ -321,3 +321,27 @@ def pad_image(temp_input, padding):
     temp_input = torch.cat([temp_input, pad_zeros], dim=1)
     temp_input = torch.cat([pad_zeros, temp_input], dim=1)
     return temp_input
+
+
+class DPBatchNorm2d(nn.Module):
+    def __init__(self, in_features):
+        super(DPBatchNorm2d, self).__init__()
+        self.in_features = in_features
+        self.out_features = in_features
+
+    def forward(self, x):
+        x.save()
+        low, up = x.lb, x.ub
+
+
+        x.lb = F.relu(low)
+        x.ub = F.relu(up)
+        x.slb = torch.cat([curr_slb.unsqueeze(0), curr_slb_bias.unsqueeze(0)], dim=0)
+        x.sub = torch.cat([curr_sub.unsqueeze(0), curr_sub_bias.unsqueeze(0)], dim=0)
+        x.is_relu = True
+        return x
+
+    @staticmethod
+    def batchNorm(x):
+        one_channel
+
