@@ -5,13 +5,13 @@ import torch.nn.functional as F
 import torch.nn as nn
 from torch import optim
 from networks import get_network, get_net_name, NormalizedResnet, FullyConnected, Normalization
-from deeppoly import DeepPoly, DPReLU, DPLinear
+from deeppoly import DeepPoly, DPReLU, DPLinear, DPConv
 
 
 DEVICE = 'cpu'
 DTYPE = torch.float32
-LR = 0.02
-num_iter = 100
+LR = 0.05
+num_iter = 50
 
 
 # class DeepPoly:
@@ -190,70 +190,78 @@ def verifiable(net, pixels):
                 verifiable_net.append(DPReLU(verifiable_net[-1].out_features))
         elif type(layer) == nn.Linear:
             verifiable_net.append(DPLinear(layer))
+        elif type(layer) == nn.Conv2d:
+            if len(verifiable_net) == 0:
+                verifiable_net.append(DPConv(layer, len(pixels)))
+            else:
+                verifiable_net.append(DPConv(layer, verifiable_net[-1].out_features))
 
     return nn.Sequential(*verifiable_net)
 
 
-def nomalize(value, inputs):
+def normalize(value, inputs):
     if inputs.shape == torch.Size([1, 1, 28, 28]):
         norm = Normalization(DEVICE, 'mnist')
         norm_val = norm(value).view(-1)
+        # norm_val = norm(value)
     else:
         norm = Normalization(DEVICE, 'cifar10')
         norm_val = norm(value).reshape(-1)
+        # norm_val = norm(value)
     return norm_val
 
 def analyze(net, inputs, eps, true_label):
-    low_bound = nomalize((inputs - eps).clamp(0, 1), inputs)
-    up_bound = nomalize((inputs + eps).clamp(0, 1), inputs)
+    low_bound = normalize((inputs - eps).clamp(0, 1), inputs)
+    up_bound = normalize((inputs + eps).clamp(0, 1), inputs)
 
     ####################################### new added
-    for alpha in range(10):
-        verifiable_net = verifiable(net, inputs)
-        optimizer = optim.Adam(verifiable_net.parameters(), lr=LR)
-        for i in range(num_iter):
-            optimizer.zero_grad()
-            verifier_output = verifiable_net(DeepPoly(low_bound.shape[0], low_bound, up_bound))
-            res = verifier_output.compute_verify_result(true_label)
-            if (res > 0).all():
-                break
-            loss = torch.log(-res[res < 0]).max()
-            loss.backward()
-            optimizer.step()
-            for p in verifiable_net.parameters():
-                if p.requires_grad:
-                    p.data.clamp_(0, 0.7854)
-
-        verifier_output = verifiable_net(DeepPoly(low_bound.shape[0], low_bound, up_bound))
-        res = verifier_output.compute_verify_result(true_label)
-        if (res > 0).all():
-            continue
-        else:
-            return False
-    return True
-    ####################################### new added
-
-    # verifiable_net = verifiable(net, inputs)
-    # optimizer = optim.Adam(verifiable_net.parameters(), lr=LR)
-    # for i in range(num_iter):
-    #     optimizer.zero_grad()
+    # for alpha in range(10):
+    #     verifiable_net = verifiable(net, inputs)
+    #     optimizer = optim.Adam(verifiable_net.parameters(), lr=LR)
+    #     for i in range(num_iter):
+    #         optimizer.zero_grad()
+    #         verifier_output = verifiable_net(DeepPoly(low_bound.shape[0], low_bound, up_bound))
+    #         res = verifier_output.compute_verify_result(true_label)
+    #         if (res > 0).all():
+    #             break
+    #         loss = torch.log(-res[res < 0]).max()
+    #         # loss = (-res[res < 0]).max()
+    #         loss.backward()
+    #         optimizer.step()
+    #         for p in verifiable_net.parameters():
+    #             if p.requires_grad:
+    #                 p.data.clamp_(0, 0.7854)
+    #
     #     verifier_output = verifiable_net(DeepPoly(low_bound.shape[0], low_bound, up_bound))
     #     res = verifier_output.compute_verify_result(true_label)
     #     if (res > 0).all():
-    #         break
-    #     loss = torch.log(-res[res < 0]).max()
-    #     loss.backward()
-    #     optimizer.step()
-    #     for p in verifiable_net.parameters():
-    #         if p.requires_grad:
-    #             p.data.clamp_(0, 0.7854)
-    #
-    # verifier_output = verifiable_net(DeepPoly(low_bound.shape[0], low_bound, up_bound))
-    # res = verifier_output.compute_verify_result(true_label)
-    # if (res > 0).all():
-    #     return True
-    # else:
-    #     return False
+    #         continue
+    #     else:
+    #         return False
+    # return True
+    ####################################### new added
+
+    verifiable_net = verifiable(net, inputs.reshape(-1))
+    optimizer = optim.Adam(verifiable_net.parameters(), lr=LR)
+    for i in range(num_iter):
+        optimizer.zero_grad()
+        verifier_output = verifiable_net(DeepPoly(low_bound.shape[0], low_bound, up_bound))
+        res = verifier_output.compute_verify_result(true_label)
+        if (res > 0).all():
+            return True
+        loss = torch.log(-res[res < 0]).max()
+        loss.backward()
+        optimizer.step()
+        for p in verifiable_net.parameters():
+            if p.requires_grad:
+                p.data.clamp_(0, 0.7854)
+
+    verifier_output = verifiable_net(DeepPoly(low_bound.shape[0], low_bound, up_bound))
+    res = verifier_output.compute_verify_result(true_label)
+    if (res > 0).all():
+        return True
+    else:
+        return False
 
 
 def main():
