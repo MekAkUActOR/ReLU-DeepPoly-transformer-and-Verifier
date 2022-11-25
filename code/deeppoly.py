@@ -333,7 +333,6 @@ class DPBatchNorm2d(nn.Module):
         x.save()
         low, up = x.lb, x.ub
 
-
         x.lb = F.relu(low)
         x.ub = F.relu(up)
         x.slb = torch.cat([curr_slb.unsqueeze(0), curr_slb_bias.unsqueeze(0)], dim=0)
