@@ -275,7 +275,7 @@ def main():
     
     inputs, true_label, eps = get_spec(args.spec, dataset)
     net = get_net(args.net, net_name)
-    print(net)
+    # print(net)
 
     outs = net(inputs)
     pred_label = outs.max(dim=1)[1].item()
