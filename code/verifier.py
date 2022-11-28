@@ -8,6 +8,8 @@ from networks import get_network, get_net_name, NormalizedResnet, FullyConnected
 from resnet import ResNet, BasicBlock
 from deeppoly import DeepPoly, DPReLU, DPLinear, DPConv, DPBasicBlock
 
+import time
+
 
 DEVICE = 'cpu'
 DTYPE = torch.float32
@@ -304,6 +306,7 @@ def analyze(net, inputs, eps, true_label):
 
 
 def main():
+    start = time.perf_counter_ns()
     parser = argparse.ArgumentParser(description='Neural network verification using DeepPoly relaxation')
     parser.add_argument('--net', type=str, required=True, help='Neural network architecture to be verified.')
     parser.add_argument('--spec', type=str, required=True, help='Test case to verify.')
@@ -315,6 +318,7 @@ def main():
     inputs, true_label, eps = get_spec(args.spec, dataset)
     net = get_net(args.net, net_name)
     # print([module for module in net.modules()])
+    '''
     if type(net) == NormalizedResnet:
         print(net)
     for module in net.modules():
@@ -330,16 +334,19 @@ def main():
                                 if type(mo) == nn.Sequential:
                                     print(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>")
                                     print(mo)
+    '''
 
     outs = net(inputs)
     pred_label = outs.max(dim=1)[1].item()
     assert pred_label == true_label
-    '''
+    # '''
     if analyze(net, inputs, eps, true_label):
-        print('verified')
+        end = time.perf_counter_ns()
+        print('', round(end - start)*0.000000001, 's, verified')
     else:
-        print('not verified')
-    '''
+        end = time.perf_counter_ns()
+        print('', round(end - start)*0.000000001, 's, not verified')
+    # '''
 
 if __name__ == '__main__':
     main()

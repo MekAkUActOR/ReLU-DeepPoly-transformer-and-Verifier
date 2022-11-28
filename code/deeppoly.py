@@ -388,10 +388,14 @@ class DPBasicBlock(nn.Module):
         self.out_features = output_shape[0] * output_shape[1] * output_shape[2]
 
     def forward(self, x):
-        lb = []
-        up = []
+        lbs = []
+        ubs = []
+        slbs = []
+        subs = []
         for path in self.paths:
             in_feature = self.in_feature
+            slb = 1
+            sub = 1
             for layer in path:
                 if type(layer) == nn.Conv2d:
                     dp_conv = DPConv(layer, in_feature)
@@ -401,7 +405,8 @@ class DPBasicBlock(nn.Module):
                     dp_relu = DPReLU(in_feature)
                     dp_relu(x)
                     in_feature = dp_relu.out_features
-            lb
+            lbs.append(x.lb)
+            ubs.append(x.ub)
 
         return x
 
