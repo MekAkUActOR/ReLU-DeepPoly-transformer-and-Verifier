@@ -4,8 +4,9 @@ import torch
 import torch.nn.functional as F
 import torch.nn as nn
 from torch import optim
-from networks import get_network, get_net_name, NormalizedResnet, FullyConnected, Normalization
-from deeppoly import DeepPoly, DPReLU, DPLinear, DPConv
+from networks import get_network, get_net_name, NormalizedResnet, FullyConnected, Conv, Normalization
+from resnet import ResNet, BasicBlock
+from deeppoly import DeepPoly, DPReLU, DPLinear, DPConv, DPBasicBlock
 
 
 DEVICE = 'cpu'
@@ -179,22 +180,60 @@ def get_net(net, net_name):
 
 # convert networks to verifiable networks
 def verifiable(net, pixels):
-    layers = [module for module in net.modules() if type(module) not in [FullyConnected, nn.Sequential]]
     verifiable_net = []
+    if type(net) == NormalizedResnet:
+        layers = [module for module in net.modules() if type(module) is ResNet]
+        for modu in layers:
+            for layer in modu:
+                if type(layer) == nn.ReLU:
+                    if len(verifiable_net) == 0:
+                        verifiable_net.append(DPReLU(len(pixels)))
+                    else:
+                        verifiable_net.append(DPReLU(verifiable_net[-1].out_features))
+                elif type(layer) == nn.Linear:
+                    verifiable_net.append(DPLinear(layer))
+                elif type(layer) == nn.Conv2d:
+                    if len(verifiable_net) == 0:
+                        verifiable_net.append(DPConv(layer, len(pixels)))
+                    else:
+                        verifiable_net.append(DPConv(layer, verifiable_net[-1].out_features))
+                elif type(layer) == nn.Sequential:
+                    for lay in layer:
+                        if type(lay) == nn.ReLU:
+                            if len(verifiable_net) == 0:
+                                verifiable_net.append(DPReLU(len(pixels)))
+                            else:
+                                verifiable_net.append(DPReLU(verifiable_net[-1].out_features))
+                        elif type(lay) == nn.Linear:
+                            verifiable_net.append(DPLinear(lay))
+                        elif type(lay) == nn.Conv2d:
+                            if len(verifiable_net) == 0:
+                                verifiable_net.append(DPConv(lay, len(pixels)))
+                            else:
+                                verifiable_net.append(DPConv(lay, verifiable_net[-1].out_features))
+                        elif type(lay) == BasicBlock:
+                            if len(verifiable_net) == 0:
+                                verifiable_net.append(DPBasicBlock(lay, len(pixels)))
+                            else:
+                                verifiable_net.append(DPBasicBlock(lay, verifiable_net[-1].out_features))
 
-    for layer in layers:
-        if type(layer) == nn.ReLU:
-            if len(verifiable_net) == 0:
-                verifiable_net.append(DPReLU(len(pixels)))
-            else:
-                verifiable_net.append(DPReLU(verifiable_net[-1].out_features))
-        elif type(layer) == nn.Linear:
-            verifiable_net.append(DPLinear(layer))
-        elif type(layer) == nn.Conv2d:
-            if len(verifiable_net) == 0:
-                verifiable_net.append(DPConv(layer, len(pixels)))
-            else:
-                verifiable_net.append(DPConv(layer, verifiable_net[-1].out_features))
+
+    else:
+        layers = [module for module in net.modules() if type(module) not in [FullyConnected, Conv, NormalizedResnet, nn.Sequential]]
+        for layer in layers:
+            # print(layer)
+            if type(layer) == nn.ReLU:
+                if len(verifiable_net) == 0:
+                    verifiable_net.append(DPReLU(len(pixels)))
+                else:
+                    verifiable_net.append(DPReLU(verifiable_net[-1].out_features))
+            elif type(layer) == nn.Linear:
+                verifiable_net.append(DPLinear(layer))
+            elif type(layer) == nn.Conv2d:
+                if len(verifiable_net) == 0:
+                    verifiable_net.append(DPConv(layer, len(pixels)))
+                else:
+                    verifiable_net.append(DPConv(layer, verifiable_net[-1].out_features))
 
     return nn.Sequential(*verifiable_net)
 
@@ -275,17 +314,32 @@ def main():
     
     inputs, true_label, eps = get_spec(args.spec, dataset)
     net = get_net(args.net, net_name)
-    # print(net)
+    # print([module for module in net.modules()])
+    if type(net) == NormalizedResnet:
+        print(net)
+    for module in net.modules():
+        if type(module) == ResNet:
+            print("-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --")
+            for layer in module:
+                print(layer)
+            for layer in module:
+                if type(layer) == nn.Sequential:
+                    for modu in layer:
+                        if type(modu) == BasicBlock:
+                            for mo in modu.modules():
+                                if type(mo) == nn.Sequential:
+                                    print(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>")
+                                    print(mo)
 
     outs = net(inputs)
     pred_label = outs.max(dim=1)[1].item()
     assert pred_label == true_label
-    # '''
+    '''
     if analyze(net, inputs, eps, true_label):
         print('verified')
     else:
         print('not verified')
-    # '''
+    '''
 
 if __name__ == '__main__':
     main()

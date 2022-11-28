@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import math
+import resnet
 
 class DeepPoly:
     def __init__(self, size, lb, ub):
@@ -208,7 +209,7 @@ class DPLinear(nn.Module):
 
 
 class DPConv(nn.Module):
-    def  __init__(self, nested: nn.Conv2d, in_feature):
+    def __init__(self, nested: nn.Conv2d, in_feature):
         super(DPConv, self).__init__()
         self.weight = nested.weight.detach()
         self.bias = nested.bias.detach() # tensor[out_channels]
@@ -223,10 +224,11 @@ class DPConv(nn.Module):
         # print("DPConv create", in_feature)
         # print("DPConv create", self.in_channels)
         # print("DPConv create", self.out_channels)
+        img_height = math.floor(math.sqrt(in_feature / self.in_channels))
         self.in_features = (
             self.in_channels,
-            math.floor(math.sqrt(in_feature / self.in_channels)),
-            math.floor(math.sqrt(in_feature / self.in_channels)),
+            img_height,
+            img_height,
         )
         # print("DPConv create", self.in_features)
         # print("DPConv create", self.kernel_size)
@@ -345,3 +347,61 @@ def pad_image(temp_input, padding):
 #         std = torch.std(x, unbiased=False)
 #         one_channel_batchnorm = (x - mean) / std
 #         return one_channel_batchnorm
+
+# if __name__ == "__main__":
+#     test = get_network('cpu', 'net4')
+#     print(test)
+#     # Conv2d(1, 16, kernel_size=(3, 3), stride=(2, 2), padding=(1, 1))
+#     # Flatten(start_dim=1, end_dim=-1)
+#     a = DPConv2d(torch.nn.Conv2d(1, 16, kernel_size=(3, 3), stride=(2, 2), padding=(1, 1)), (1, 28, 28))
+#     # print(a.weight)
+#     print(a.bias)
+#     print(type(a.bias))
+#     print(a.bias.shape)
+#
+#     print(a.weight.shape)
+#     b = torch.cat([a.weight, a.bias.unsqueeze(3)], dim=0)
+#     print(b.shape)
+
+class DPBasicBlock(nn.Module):
+    def __init__(self, nested: resnet.BasicBlock, in_feature):
+        super(DPBasicBlock, self).__init__()
+        self.in_planes = nested.in_planes
+        self.planes = nested.planes
+        self.stride = nested.stride
+        self.bn = nested.bn
+        self.kernel = nested.kernel
+        self.expansion = nested.expansion
+        self.paths = []
+        for modu in nested.modules():
+            if type(modu) == nn.Sequential:
+                self.paths.append(modu)
+        self.in_feature = in_feature
+        img_height = math.floor(math.sqrt(in_feature / self.in_planes))
+        self.in_features = (
+            self.in_planes,
+            img_height,
+            img_height,
+        )
+        temp_img = torch.zeros(self.in_features)
+        output_shape = self.paths[0](temp_img).shape
+        self.out_features = output_shape[0] * output_shape[1] * output_shape[2]
+
+    def forward(self, x):
+        lb = []
+        up = []
+        for path in self.paths:
+            in_feature = self.in_feature
+            for layer in path:
+                if type(layer) == nn.Conv2d:
+                    dp_conv = DPConv(layer, in_feature)
+                    dp_conv(x)
+                    in_feature = dp_conv.out_features
+                elif type(layer) == nn.ReLU:
+                    dp_relu = DPReLU(in_feature)
+                    dp_relu(x)
+                    in_feature = dp_relu.out_features
+            lb
+
+        return x
+
