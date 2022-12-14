@@ -92,22 +92,34 @@ class DPReLU(nn.Module):
         '''
         low > 0
         '''
-        slope_low_1 = (F.relu(up) - F.relu(low)) / (up - low)
-        bias_low_1 = F.relu(low) - slope_low_1 * low
-        slope_up_1 = (F.relu(up) - F.relu(low)) / (up - low)
-        bias_up_1 = F.relu(up) - slope_up_1 * up
+        # slope_low_1 = (F.relu(up) - F.relu(low)) / (up - low)
+        # bias_low_1 = F.relu(low) - slope_low_1 * low
+        # slope_up_1 = (F.relu(up) - F.relu(low)) / (up - low)
+        # bias_up_1 = F.relu(up) - slope_up_1 * up
+        slope_low_1 = torch.ones(self.in_features)
+        bias_low_1 = torch.zeros(self.in_features)
+        slope_up_1 = torch.ones(self.in_features)
+        bias_up_1 = torch.zeros(self.in_features)
         '''
         up < 0
         '''
-        slope_low_2 = (F.relu(up) - F.relu(low)) / (up - low)
-        bias_low_2 = F.relu(low) - slope_low_2 * low
-        slope_up_2 = F.relu(up) - F.relu(low) / (up - low)
-        bias_up_2 = F.relu(up) - slope_up_2 * up
+        # slope_low_2 = (F.relu(up) - F.relu(low)) / (up - low)
+        # bias_low_2 = F.relu(low) - slope_low_2 * low
+        # slope_up_2 = F.relu(up) - F.relu(low) / (up - low)
+        # bias_up_2 = F.relu(up) - slope_up_2 * up
+        slope_low_2 = torch.zeros(self.in_features)
+        bias_low_2 = torch.zeros(self.in_features)
+        slope_up_2 = torch.zeros(self.in_features)
+        bias_up_2 = torch.zeros(self.in_features)
         '''
         low < 0 < up
         '''
         # print("ALPHA: ", self.alpha)
         # slope_low_3 = torch.tan(self.alpha)
+        # slope_low_3 = self.alpha
+        # bias_low_3 = slope_low_3 * low - slope_low_3 * low
+        # slope_up_3 = (F.relu(up) - F.relu(low)) / (up - low)
+        # bias_up_3 = F.relu(up) - slope_up_3 * up
         slope_low_3 = self.alpha
         bias_low_3 = slope_low_3 * low - slope_low_3 * low
         slope_up_3 = (F.relu(up) - F.relu(low)) / (up - low)
@@ -339,10 +351,10 @@ class DPBasicBlock(nn.Module):
         self.expansion = nested.expansion
         self.path_a = nested.path_a
         self.path_b = nested.path_b
-        self.paths = []
-        for modu in nested.modules():
-            if type(modu) == nn.Sequential:
-                self.paths.append(modu)
+        # self.paths = []
+        # for modu in nested.modules():
+        #     if type(modu) == nn.Sequential:
+        #         self.paths.append(modu)
         self.in_feature = in_feature
         img_height = math.floor(math.sqrt(in_feature / self.in_planes))
         self.in_features = (
@@ -351,7 +363,7 @@ class DPBasicBlock(nn.Module):
             img_height,
         )
         temp_img = torch.zeros(self.in_features)
-        output_shape = self.paths[0](temp_img).shape
+        output_shape = self.path_a(temp_img).shape
         self.out_features = output_shape[0] * output_shape[1] * output_shape[2]
 
     def forward(self, x):

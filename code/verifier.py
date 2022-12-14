@@ -15,7 +15,7 @@ DEVICE = 'cpu'
 DTYPE = torch.float32
 LR = 0.7
 num_iter = 10
-lr_decay = 0.8
+lr_decay = 0.75
 lr_destep = 1
 
 # class DeepPoly:
@@ -299,7 +299,7 @@ def analyze(net, inputs, eps, true_label):
         for p in verifiable_net.parameters():
             if p.requires_grad:
                 p.data.clamp_(0, 1)
-        if scheduler.get_last_lr()[0] > 0.2:
+        if scheduler.get_last_lr()[0] > 0.1:
             scheduler.step()
 
     optimizer.zero_grad()
