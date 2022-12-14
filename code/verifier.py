@@ -13,9 +13,10 @@ import time
 
 DEVICE = 'cpu'
 DTYPE = torch.float32
-LR = 0.05
-num_iter = 25
-
+LR = 0.7
+num_iter = 10
+lr_decay = 0.8
+lr_destep = 1
 
 # class DeepPoly:
 #     def __init__(self, lb, ub, lexpr, uexpr) -> None:
@@ -284,7 +285,9 @@ def analyze(net, inputs, eps, true_label):
 
     verifiable_net = verifiable(net, inputs.reshape(-1))
     optimizer = optim.Adam(verifiable_net.parameters(), lr=LR)
-    for i in range(num_iter):
+    scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=lr_destep, gamma=lr_decay)
+    for epoch in range(num_iter):
+        # print(scheduler.get_last_lr())
         optimizer.zero_grad()
         verifier_output = verifiable_net(DeepPoly(low_bound.shape[0], low_bound, up_bound))
         res = verifier_output.compute_verify_result(true_label)
@@ -295,8 +298,11 @@ def analyze(net, inputs, eps, true_label):
         optimizer.step()
         for p in verifiable_net.parameters():
             if p.requires_grad:
-                p.data.clamp_(0, 0.7854)
+                p.data.clamp_(0, 1)
+        if scheduler.get_last_lr()[0] > 0.2:
+            scheduler.step()
 
+    optimizer.zero_grad()
     verifier_output = verifiable_net(DeepPoly(low_bound.shape[0], low_bound, up_bound))
     res = verifier_output.compute_verify_result(true_label)
     if (res > 0).all():

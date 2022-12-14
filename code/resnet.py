@@ -106,6 +106,8 @@ class BasicBlock(ResidualBlock, nn.Module):
                 layers_a.append(nn.BatchNorm2d(self.expansion * planes))
         path_a = nn.Sequential(*layers_a)
         self.out_dim = in_dim
+        self.path_a = path_a
+        self.path_b = path_b
         super(BasicBlock, self).__init__(path_a, path_b)
 
     def _getShapeConv(
