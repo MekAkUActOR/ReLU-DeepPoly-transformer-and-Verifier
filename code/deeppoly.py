@@ -11,16 +11,13 @@ class DeepPoly:
         self.lb = lb
         self.ub = ub
 
-        self.history = []
+        self.history = [[]]
         self.layers = 0
 
-    def save(self):
-        # print("save ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^")
+    def save(self, path=0):
         # """ Save all constraints for the back substitution """
         lb = torch.cat([self.lb, torch.ones(1)])
-        # print("save lb,", lb.shape)
         ub = torch.cat([self.ub, torch.ones(1)])
-        # print("save ub,", ub.shape)
         keep_bias = torch.zeros(1, self.slb.shape[1])
         keep_bias[0, self.slb.shape[1] - 1] = 1
         slb = torch.cat([self.slb, keep_bias], dim=0)
@@ -29,7 +26,7 @@ class DeepPoly:
         # layer num
         self.layers += 1
         # record each layer
-        self.history.append((slb, sub, lb, ub))
+        self.history[path].append((slb, sub, lb, ub))
         return self
 
     def compute_verify_result(self, true_label):
@@ -37,18 +34,14 @@ class DeepPoly:
         n = self.slb.shape[0] - 1
         unit = torch.diag(torch.ones(n))
         weights = torch.cat((-unit[:, :true_label], torch.ones(n, 1), -unit[:, true_label:], torch.zeros(n, 1)), dim=1)
-        # print("compute_verify_result,", weights.shape)
-        # print("===========================================================================")
 
         for i in range(self.layers, 0, -1):
             weights = self.resolve(weights, i - 1, lower=True)
-        # print("----------------------------------------------------------")
-        # print("compute_verify_result,", weights.shape, weights)
 
         return weights
 
     # TODO: implement Conv in resolve
-    def resolve(self, constrains, layer, lower=True):
+    def resolve(self, constrains, layer, lower=True, path=0):
         # print("resolve >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>")
         """
         lower = True: return the lower bound
@@ -57,7 +50,7 @@ class DeepPoly:
         # distinguish the sign of the coefficients of the constraints
         pos_coeff = F.relu(constrains)
         neg_coeff = -F.relu(-constrains)
-        layer_info = self.history[layer]
+        layer_info = self.history[path][layer]
         if layer == 0:
             # layer_info[2],layer_info[3]: concrete lower and upper bound
             lb, ub = layer_info[2], layer_info[3]
@@ -169,10 +162,7 @@ class DPLinear(nn.Module):
     def forward(self, x):
         x.save()
         # append bias as last column
-        # print("Linear weight", self.weight.shape)
-        # print("Linear bias", self.bias.shape)
         init_slb = torch.cat([self.weight, self.bias.unsqueeze(1)], dim=1)
-        # print("Linear init_slb", init_slb.shape)
         x.lb = init_slb
         x.ub = init_slb
         x.slb = init_slb
@@ -180,7 +170,6 @@ class DPLinear(nn.Module):
         for i in range(x.layers, 0, -1):
             x.lb = x.resolve(x.lb, i - 1, lower=True)
             x.ub = x.resolve(x.ub, i - 1, lower=False)
-        # x.is_relu = False
         return x
 
 
@@ -197,19 +186,12 @@ class DPConv(nn.Module):
         # self.padding_mode = nested.padding_mode
         # self.dilation = nested.dilation
         # self.groups = nested.groups
-        # print("DPConv create", in_feature)
-        # print("DPConv create", self.in_channels)
-        # print("DPConv create", self.out_channels)
         img_height = math.floor(math.sqrt(in_feature / self.in_channels))
         self.in_features = (
             self.in_channels,
             img_height,
             img_height,
         )
-        # print("DPConv create", self.in_features)
-        # print("DPConv create", self.kernel_size)
-        # print("DPConv create", self.stride)
-        # print("DPConv create", self.padding)
         self.out_features = self.out_channels * \
                            math.floor((self.in_features[1] - self.kernel_size[0] + 2 * self.padding[0]) / self.stride[0] + 1) * \
                            math.floor((self.in_features[2] - self.kernel_size[0] + 2 * self.padding[0]) / self.stride[0] + 1)
@@ -218,7 +200,6 @@ class DPConv(nn.Module):
     def forward(self, x):
         x.save()
         init_slb = self.weightMtrx
-        # print("Conv init_slb", init_slb.shape, init_slb)
         x.lb = init_slb
         x.ub = init_slb
         x.slb = init_slb
@@ -226,9 +207,6 @@ class DPConv(nn.Module):
         for i in range(x.layers, 0, -1):
             x.lb = x.resolve(x.lb, i - 1, lower=True)
             x.ub = x.resolve(x.ub, i - 1, lower=False)
-        # print("Conv init_slb x.lb", x.lb)
-        # print("Conv init_slb x.ub", x.ub)
-        # x.is_relu = False
         return x
 
     @staticmethod
@@ -239,8 +217,8 @@ class DPConv(nn.Module):
         inputs: [(pixels: c_in * input_height * input_width)]
         bias: [(c_out)]
         """
-        c_out = conv_weights.shape[0]
-        c_in = conv_weights.shape[1]
+        # c_out = conv_weights.shape[0]
+        # c_in = conv_weights.shape[1]
         kernel_size = conv_weights.shape[2]
         input_height = in_feature[1]
         input_width = in_feature[2]
@@ -260,8 +238,6 @@ class DPConv(nn.Module):
                                                      input_pad_h,
                                                      input_pad_w,
                                                      stride)
-                # a test
-                # kernel_matrix = torch.randn((output_height * output_width, input_pad_h * input_pad_w))
                 dense_matrix = dense_weights(kernel_matrix, matrix_mask)
                 matrix_line_lst.append(dense_matrix)
             line_matrix = torch.cat(matrix_line_lst, dim=1)
@@ -367,25 +343,27 @@ class DPBasicBlock(nn.Module):
         self.out_features = output_shape[0] * output_shape[1] * output_shape[2]
 
     def forward(self, x):
-        lbs = []
-        ubs = []
-        slbs = []
-        subs = []
-        for path in self.paths:
-            in_feature = self.in_feature
-            slb = 1
-            sub = 1
-            for layer in path:
-                if type(layer) == nn.Conv2d:
-                    dp_conv = DPConv(layer, in_feature)
-                    dp_conv(x)
-                    in_feature = dp_conv.out_features
-                elif type(layer) == nn.ReLU:
-                    dp_relu = DPReLU(in_feature)
-                    dp_relu(x)
-                    in_feature = dp_relu.out_features
-            lbs.append(x.lb)
-            ubs.append(x.ub)
+        x.save()
+        x.history = x.history + x.history
+        # lbs = []
+        # ubs = []
+        # slbs = []
+        # subs = []
+        # for path in self.paths:
+        #     in_feature = self.in_feature
+        #     slb = 1
+        #     sub = 1
+        #     for layer in path:
+        #         if type(layer) == nn.Conv2d:
+        #             dp_conv = DPConv(layer, in_feature)
+        #             dp_conv(x)
+        #             in_feature = dp_conv.out_features
+        #         elif type(layer) == nn.ReLU:
+        #             dp_relu = DPReLU(in_feature)
+        #             dp_relu(x)
+        #             in_feature = dp_relu.out_features
+        #     lbs.append(x.lb)
+        #     ubs.append(x.ub)
 
         return x
 
